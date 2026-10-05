@@ -20,4 +20,5 @@ import (
 	_ "github.com/galaxy-io/filament/connectors/sample"
 	_ "github.com/galaxy-io/filament/connectors/snowflake"
 	_ "github.com/galaxy-io/filament/connectors/stdout"
+	_ "github.com/galaxy-io/filament/connectors/vector"
 )

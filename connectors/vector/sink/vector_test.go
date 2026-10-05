@@ -1,0 +1,86 @@
+package sink
+
+import (
+	"context"
+	"testing"
+
+	"github.com/galaxy-io/filament"
+	"github.com/galaxy-io/filament/arrowbatch"
+)
+
+func TestVectorSink_Spec(t *testing.T) {
+	s := New()
+	spec := s.Spec()
+
+	if spec.Name != "vector" {
+		t.Errorf("expected spec.Name to be 'vector', got %q", spec.Name)
+	}
+
+	if spec.DisplayName != "Vector Store" {
+		t.Errorf("expected DisplayName to be 'Vector Store', got %q", spec.DisplayName)
+	}
+}
+
+func TestVectorSink_ParseConfig(t *testing.T) {
+	rawCfg := map[string]any{
+		"url":               "http://localhost:6333",
+		"provider":          "qdrant",
+		"collection":        "documents",
+		"batch_size":        250,
+		"embedding_provider": "openai",
+	}
+
+	cfg, err := ParseConfig(filament.NewConfig(rawCfg))
+	if err != nil {
+		t.Fatalf("unexpected error parsing config: %v", err)
+	}
+
+	if cfg.URL != "http://localhost:6333" {
+		t.Errorf("expected URL to be 'http://localhost:6333', got %q", cfg.URL)
+	}
+
+	if cfg.Provider != "qdrant" {
+		t.Errorf("expected Provider to be 'qdrant', got %q", cfg.Provider)
+	}
+
+	if cfg.BatchSize != 250 {
+		t.Errorf("expected BatchSize to be 250, got %d", cfg.BatchSize)
+	}
+}
+
+func TestVectorSink_Lifecycle(t *testing.T) {
+	ctx := context.Background()
+	s := New()
+
+	runSpec := filament.RunSpec{
+		Run: filament.RunID("test-run-1"),
+		Sink: filament.SinkConfig{
+			Config: map[string]any{
+				"url":        "http://localhost:8000",
+				"provider":   "chroma",
+				"collection": "test_collection",
+			},
+		},
+	}
+
+	if err := s.Open(ctx, runSpec); err != nil {
+		t.Fatalf("failed to open vector sink: %v", err)
+	}
+
+	// Create marker batch
+	batch := arrowbatch.NewMarker()
+	batch.Resource = "users"
+
+	receipt, err := s.Apply(ctx, batch, filament.ApplyOptions{})
+	if err != nil {
+		t.Fatalf("failed to apply batch: %v", err)
+	}
+
+	if receipt.RowsWritten != 0 {
+		t.Errorf("expected 0 rows written for marker batch, got %d", receipt.RowsWritten)
+	}
+
+	if err := s.Commit(ctx); err != nil {
+		t.Fatalf("failed to commit run: %v", err)
+	}
+}
