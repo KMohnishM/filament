@@ -59,8 +59,8 @@ func TestVectorSink_Lifecycle(t *testing.T) {
 		Run: filament.RunID("test-run-1"),
 		Sink: filament.SinkConfig{
 			Config: map[string]any{
-				"url":        "http://localhost:8000",
-				"provider":   "chroma",
+				"url":        "mock://localhost:8000",
+				"provider":   "mock",
 				"collection": "test_collection",
 			},
 		},
@@ -85,5 +85,48 @@ func TestVectorSink_Lifecycle(t *testing.T) {
 
 	if err := s.Commit(ctx); err != nil {
 		t.Fatalf("failed to commit run: %v", err)
+	}
+}
+
+// TestVectorSink_AbortRejection verifies that Apply rejects writes after Abort is called.
+func TestVectorSink_AbortRejection(t *testing.T) {
+	ctx := context.Background()
+	s := New()
+
+	runSpec := filament.RunSpec{
+		Run: filament.RunID("test-run-abort"),
+		Sink: filament.SinkConfig{
+			Config: map[string]any{
+				"url":      "mock://localhost:8000",
+				"provider": "mock",
+			},
+		},
+	}
+
+	if err := s.Open(ctx, runSpec); err != nil {
+		t.Fatalf("failed to open vector sink: %v", err)
+	}
+
+	if err := s.Abort(ctx); err != nil {
+		t.Fatalf("failed to abort vector sink: %v", err)
+	}
+
+	batch := arrowbatch.NewMarker()
+	batch.Resource = "users"
+
+	_, err := s.Apply(ctx, batch, filament.ApplyOptions{})
+	if err == nil {
+		t.Fatalf("expected Apply to return an error after Abort, got nil")
+	}
+}
+
+// TestParseFloats verifies string parsing into float32 array.
+func TestParseFloats(t *testing.T) {
+	floats := parseFloats("[0.1, 0.25, 0.5]")
+	if len(floats) != 3 {
+		t.Fatalf("expected 3 floats, got %d", len(floats))
+	}
+	if floats[0] != 0.1 || floats[1] != 0.25 || floats[2] != 0.5 {
+		t.Errorf("unexpected float values: %v", floats)
 	}
 }
