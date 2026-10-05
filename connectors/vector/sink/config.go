@@ -145,6 +145,31 @@ func ParseConfig(cfg filament.Config) (Config, error) {
 		c.PrimaryKey = val
 	}
 
+	// Parse text_fields from raw config map (supporting string slice, any slice, or comma-separated string)
+	if raw, ok := cfg.Raw()["text_fields"]; ok {
+		switch v := raw.(type) {
+		case []string:
+			c.TextFields = v
+		case []any:
+			var fields []string
+			for _, item := range v {
+				if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+					fields = append(fields, strings.TrimSpace(s))
+				}
+			}
+			c.TextFields = fields
+		case string:
+			parts := strings.Split(v, ",")
+			var fields []string
+			for _, p := range parts {
+				if s := strings.TrimSpace(p); s != "" {
+					fields = append(fields, s)
+				}
+			}
+			c.TextFields = fields
+		}
+	}
+
 	if val := cfg.String("embedding_field"); val != "" {
 		c.EmbeddingField = val
 	}

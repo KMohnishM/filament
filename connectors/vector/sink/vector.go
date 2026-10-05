@@ -171,9 +171,16 @@ func (s *Sink) Apply(ctx context.Context, b *arrowbatch.Batch, opts filament.App
 	if rows != nil {
 		schema := rows.Schema()
 		pkColIdx := findColumnIndex(schema, s.cfg.PrimaryKey)
+		if pkColIdx < 0 {
+			return filament.WriteReceipt{}, fmt.Errorf("vector sink: primary key column %q not found in resource %q schema", s.cfg.PrimaryKey, b.Resource)
+		}
 
 		for i := 0; i < numRows; i++ {
-			docID := extractDocID(rows, i, pkColIdx, b.Resource)
+			docID, err := extractDocID(rows, i, pkColIdx)
+			if err != nil {
+				return filament.WriteReceipt{}, fmt.Errorf("vector sink: extract primary key for row %d: %w", i, err)
+			}
+
 			opStr := opStrings[i]
 
 			if opStr == "delete" {
@@ -181,7 +188,11 @@ func (s *Sink) Apply(ctx context.Context, b *arrowbatch.Batch, opts filament.App
 			} else {
 				// Insert or Update operation: extract Document text, Vector, and Metadata from Arrow row
 				docText := extractDocumentText(rows, i, s.cfg.TextFields)
-				vector := extractEmbeddingVector(rows, i, s.cfg.EmbeddingField)
+				vector, err := extractEmbeddingVector(rows, i, s.cfg.EmbeddingField)
+				if err != nil {
+					return filament.WriteReceipt{}, fmt.Errorf("vector sink: extract embedding vector for row %d: %w", i, err)
+				}
+
 				meta := extractMetadataMap(rows, i, s.cfg.EmbeddingField, b.Resource, b.Seq)
 
 				doc := VectorDoc{
@@ -248,7 +259,7 @@ func opString(op rowmodel.Operation) (string, error) {
 	}
 }
 
-// findColumnIndex locates a column index by name, with fallback search for "id", "_filament_key", or "_id".
+// findColumnIndex locates a column index by name, returning -1 if no candidate column is found.
 func findColumnIndex(schema *arrow.Schema, targetCol string) int {
 	if schema == nil {
 		return -1
@@ -260,6 +271,7 @@ func findColumnIndex(schema *arrow.Schema, targetCol string) int {
 				return i
 			}
 		}
+		return -1
 	}
 
 	// Fallback field candidates
@@ -272,26 +284,26 @@ func findColumnIndex(schema *arrow.Schema, targetCol string) int {
 		}
 	}
 
-	return 0
+	return -1
 }
 
-// extractDocID extracts the primary key string value from the specified column for row i.
-func extractDocID(rows arrow.RecordBatch, rowIdx int, colIdx int, resource string) string {
+// extractDocID extracts the non-empty primary key string value from the specified column for row i.
+func extractDocID(rows arrow.RecordBatch, rowIdx int, colIdx int) (string, error) {
 	if rows == nil || colIdx < 0 || colIdx >= int(rows.NumCols()) {
-		return fmt.Sprintf("%s-%d", resource, rowIdx)
+		return "", fmt.Errorf("invalid column index %d for schema", colIdx)
 	}
 
 	col := rows.Column(colIdx)
 	if col == nil || col.IsNull(rowIdx) {
-		return fmt.Sprintf("%s-%d", resource, rowIdx)
+		return "", fmt.Errorf("primary key value at row %d is null", rowIdx)
 	}
 
-	valStr := col.ValueStr(rowIdx)
-	if strings.TrimSpace(valStr) == "" {
-		return fmt.Sprintf("%s-%d", resource, rowIdx)
+	valStr := strings.TrimSpace(col.ValueStr(rowIdx))
+	if valStr == "" {
+		return "", fmt.Errorf("primary key value at row %d is empty", rowIdx)
 	}
 
-	return valStr
+	return valStr, nil
 }
 
 // extractDocumentText concatenates values from specified text fields for row i.
@@ -331,9 +343,9 @@ func extractDocumentText(rows arrow.RecordBatch, rowIdx int, textFields []string
 }
 
 // extractEmbeddingVector extracts a []float32 array from the embedding column if present.
-func extractEmbeddingVector(rows arrow.RecordBatch, rowIdx int, embeddingCol string) []float32 {
+func extractEmbeddingVector(rows arrow.RecordBatch, rowIdx int, embeddingCol string) ([]float32, error) {
 	if rows == nil || embeddingCol == "" {
-		return nil
+		return nil, nil
 	}
 
 	schema := rows.Schema()
@@ -341,15 +353,14 @@ func extractEmbeddingVector(rows arrow.RecordBatch, rowIdx int, embeddingCol str
 		if strings.EqualFold(f.Name, embeddingCol) {
 			col := rows.Column(idx)
 			if col == nil || col.IsNull(rowIdx) {
-				return nil
+				return nil, nil
 			}
-			// Attempt string parsing of array format "[0.1, 0.2, ...]" or raw float array
 			valStr := col.ValueStr(rowIdx)
 			return parseFloats(valStr)
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 // extractMetadataMap extracts non-vector column values into a key-value metadata map.
@@ -378,21 +389,27 @@ func extractMetadataMap(rows arrow.RecordBatch, rowIdx int, embeddingCol string,
 }
 
 // parseFloats converts a string formatted float list (e.g. "[0.1, 0.2]") into a []float32 slice.
-func parseFloats(s string) []float32 {
+// Returns an error if any float token fails to parse.
+func parseFloats(s string) ([]float32, error) {
 	clean := strings.Trim(s, "[]{} ")
 	if clean == "" {
-		return nil
+		return nil, nil
 	}
 
 	tokens := strings.Split(clean, ",")
 	res := make([]float32, 0, len(tokens))
 
 	for _, tok := range tokens {
-		val, err := strconv.ParseFloat(strings.TrimSpace(tok), 32)
-		if err == nil {
-			res = append(res, float32(val))
+		t := strings.TrimSpace(tok)
+		if t == "" {
+			continue
 		}
+		val, err := strconv.ParseFloat(t, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid float value %q in embedding vector %q: %w", t, s, err)
+		}
+		res = append(res, float32(val))
 	}
 
-	return res
+	return res, nil
 }

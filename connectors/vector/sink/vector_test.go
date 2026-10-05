@@ -28,6 +28,7 @@ func TestVectorSink_ParseConfig(t *testing.T) {
 		"url":                "http://localhost:6333",
 		"provider":           "qdrant",
 		"collection":         "documents",
+		"text_fields":        []string{"title", "description"},
 		"batch_size":         250,
 		"embedding_provider": "openai",
 	}
@@ -43,6 +44,10 @@ func TestVectorSink_ParseConfig(t *testing.T) {
 
 	if cfg.Provider != "qdrant" {
 		t.Errorf("expected Provider to be 'qdrant', got %q", cfg.Provider)
+	}
+
+	if len(cfg.TextFields) != 2 || cfg.TextFields[0] != "title" || cfg.TextFields[1] != "description" {
+		t.Errorf("expected TextFields to be ['title', 'description'], got %v", cfg.TextFields)
 	}
 
 	if cfg.BatchSize != 250 {
@@ -120,13 +125,21 @@ func TestVectorSink_AbortRejection(t *testing.T) {
 	}
 }
 
-// TestParseFloats verifies string parsing into float32 array.
+// TestParseFloats verifies valid float parsing and error reporting on invalid float tokens.
 func TestParseFloats(t *testing.T) {
-	floats := parseFloats("[0.1, 0.25, 0.5]")
+	floats, err := parseFloats("[0.1, 0.25, 0.5]")
+	if err != nil {
+		t.Fatalf("unexpected error parsing valid floats: %v", err)
+	}
 	if len(floats) != 3 {
 		t.Fatalf("expected 3 floats, got %d", len(floats))
 	}
 	if floats[0] != 0.1 || floats[1] != 0.25 || floats[2] != 0.5 {
 		t.Errorf("unexpected float values: %v", floats)
+	}
+
+	_, err = parseFloats("[0.1, invalid_token, 0.5]")
+	if err == nil {
+		t.Errorf("expected parseFloats to return an error on invalid token, got nil")
 	}
 }

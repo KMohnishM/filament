@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -78,7 +79,6 @@ func (c *Client) Health(ctx context.Context) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		// If custom URL endpoint does not support /health, return error for bad connection
 		return fmt.Errorf("vector store client: health check failed for %q: %w", c.cfg.URL, err)
 	}
 	defer resp.Body.Close()
@@ -112,7 +112,6 @@ func (c *Client) BatchUpsert(ctx context.Context, collection string, docs []Vect
 		return nil
 	}
 
-	// HTTP API batch write execution
 	return c.sendHTTPRequest(ctx, http.MethodPost, collection, "/upsert", docs)
 }
 
@@ -183,7 +182,9 @@ func (c *Client) sendHTTPRequest(ctx context.Context, method, collection, path s
 	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
 		baseURL = "http://" + baseURL
 	}
-	reqURL := fmt.Sprintf("%s/collections/%s%s", strings.TrimSuffix(baseURL, "/"), collection, path)
+
+	escapedCollection := url.PathEscape(collection)
+	reqURL := fmt.Sprintf("%s/collections/%s%s", strings.TrimSuffix(baseURL, "/"), escapedCollection, path)
 
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, bytes.NewReader(body))
 	if err != nil {
