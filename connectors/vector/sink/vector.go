@@ -190,6 +190,7 @@ func (s *Sink) Abort(ctx context.Context) error {
 	return nil
 }
 
+// opString converts a rowmodel.Operation enum to its string representation ("insert", "update", "delete").
 func opString(op rowmodel.Operation) string {
 	switch op {
 	case rowmodel.OpInsert:

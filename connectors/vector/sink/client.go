@@ -8,11 +8,20 @@ import (
 
 // VectorDoc represents a single document payload for vector store ingestion.
 type VectorDoc struct {
-	ID        string                 `json:"id"`
-	Vector    []float32              `json:"vector,omitempty"`
-	Document  string                 `json:"document,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	Operation string                 `json:"operation"` // "insert", "update", "delete"
+	// ID is the unique primary key of the vector document.
+	ID string `json:"id"`
+
+	// Vector contains the floating point array representation of the document embedding.
+	Vector []float32 `json:"vector,omitempty"`
+
+	// Document contains the original textual content of the payload.
+	Document string `json:"document,omitempty"`
+
+	// Metadata holds arbitrary key-value attributes associated with the document.
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+
+	// Operation specifies the change operation kind ("insert", "update", or "delete").
+	Operation string `json:"operation"`
 }
 
 // Client manages interaction with the underlying vector store backend.
@@ -22,7 +31,7 @@ type Client struct {
 	store map[string]map[string]VectorDoc // collection -> ID -> VectorDoc (in-memory representation)
 }
 
-// NewClient initializes a client for the vector store sink.
+// NewClient initializes a client instance for the vector store sink.
 func NewClient(cfg Config) *Client {
 	return &Client{
 		cfg:   cfg,

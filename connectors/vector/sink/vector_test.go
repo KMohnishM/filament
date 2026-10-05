@@ -8,6 +8,7 @@ import (
 	"github.com/galaxy-io/filament/arrowbatch"
 )
 
+// TestVectorSink_Spec verifies that the Vector Store sink returns a non-empty name and display title.
 func TestVectorSink_Spec(t *testing.T) {
 	s := New()
 	spec := s.Spec()
@@ -21,12 +22,13 @@ func TestVectorSink_Spec(t *testing.T) {
 	}
 }
 
+// TestVectorSink_ParseConfig verifies parsing of raw configuration options into a Config struct.
 func TestVectorSink_ParseConfig(t *testing.T) {
 	rawCfg := map[string]any{
-		"url":               "http://localhost:6333",
-		"provider":          "qdrant",
-		"collection":        "documents",
-		"batch_size":        250,
+		"url":                "http://localhost:6333",
+		"provider":           "qdrant",
+		"collection":         "documents",
+		"batch_size":         250,
 		"embedding_provider": "openai",
 	}
 
@@ -48,6 +50,7 @@ func TestVectorSink_ParseConfig(t *testing.T) {
 	}
 }
 
+// TestVectorSink_Lifecycle verifies Open, Apply, and Commit lifecycle execution for the vector sink.
 func TestVectorSink_Lifecycle(t *testing.T) {
 	ctx := context.Background()
 	s := New()

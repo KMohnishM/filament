@@ -10,6 +10,7 @@ import (
 	"github.com/galaxy-io/filament/registry"
 )
 
+// init registers the vector store sink with the default registry on package import.
 func init() {
 	registry.RegisterSink("vector", filament.MaturityAlpha, func() filament.Sink { return sink.New() })
 }

@@ -8,21 +8,43 @@ import (
 	"github.com/galaxy-io/filament"
 )
 
+// defaultBatchSize specifies the default row limit per vector batch upsert.
 const defaultBatchSize = 500
 
 // Config defines the connection and execution settings for the Vector Store sink.
 type Config struct {
-	URL               string   `json:"url"`
-	APIKey            string   `json:"api_key,omitempty"`
-	Provider          string   `json:"provider"`
-	Collection        string   `json:"collection,omitempty"`
-	PrimaryKey        string   `json:"primary_key,omitempty"`
-	TextFields        []string `json:"text_fields,omitempty"`
-	EmbeddingField    string   `json:"embedding_field,omitempty"`
-	EmbeddingProvider string   `json:"embedding_provider,omitempty"`
-	EmbeddingAPIKey   string   `json:"embedding_api_key,omitempty"`
-	EmbeddingModel    string   `json:"embedding_model,omitempty"`
-	BatchSize         int      `json:"batch_size,omitempty"`
+	// URL specifies the host endpoint URI for the target vector database.
+	URL string `json:"url"`
+
+	// APIKey specifies the authentication secret or token for the vector store.
+	APIKey string `json:"api_key,omitempty"`
+
+	// Provider identifies the vector store backend (pgvector, chroma, qdrant, milvus, mock).
+	Provider string `json:"provider"`
+
+	// Collection specifies the target collection or table for document storage.
+	Collection string `json:"collection,omitempty"`
+
+	// PrimaryKey specifies the field name used as unique vector document ID.
+	PrimaryKey string `json:"primary_key,omitempty"`
+
+	// TextFields lists record column names used to build the text payload for embedding.
+	TextFields []string `json:"text_fields,omitempty"`
+
+	// EmbeddingField specifies an optional field containing pre-computed vector embeddings.
+	EmbeddingField string `json:"embedding_field,omitempty"`
+
+	// EmbeddingProvider identifies the embedding service (openai, ollama, huggingface, custom_http, precomputed).
+	EmbeddingProvider string `json:"embedding_provider,omitempty"`
+
+	// EmbeddingAPIKey specifies the secret API key for third-party embedding providers.
+	EmbeddingAPIKey string `json:"embedding_api_key,omitempty"`
+
+	// EmbeddingModel identifies the model used for embedding generation.
+	EmbeddingModel string `json:"embedding_model,omitempty"`
+
+	// BatchSize specifies the maximum row batch size per write operation.
+	BatchSize int `json:"batch_size,omitempty"`
 }
 
 // ConfigSchema describes the configuration schema for UI catalog display and validation.
