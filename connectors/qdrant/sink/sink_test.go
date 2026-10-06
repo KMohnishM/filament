@@ -53,6 +53,19 @@ func TestQdrantSink_ParseConfig(t *testing.T) {
 	}
 }
 
+// TestQdrantSink_HTTPSSecurityCheck verifies that plain HTTP URLs are rejected when api_key is set.
+func TestQdrantSink_HTTPSSecurityCheck(t *testing.T) {
+	rawCfg := map[string]any{
+		"url":     "http://remote-qdrant.example.com",
+		"api_key": "secret-token",
+	}
+
+	_, err := ParseConfig(filament.NewConfig(rawCfg))
+	if err == nil {
+		t.Errorf("expected ParseConfig to error when api_key is configured over plain http, got nil")
+	}
+}
+
 // TestQdrantSink_Lifecycle verifies Open, Apply, and Commit lifecycle execution for the Qdrant sink.
 func TestQdrantSink_Lifecycle(t *testing.T) {
 	ctx := context.Background()

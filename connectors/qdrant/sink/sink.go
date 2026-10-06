@@ -115,7 +115,7 @@ func (s *Sink) EnsureSchema(ctx context.Context, resource string, schema rowmode
 	return nil
 }
 
-// Apply converts an Arrow batch into vector operations (upsert / delete) and writes to Qdrant.
+// Apply converts an Arrow batch into vector operations (upsert / delete) and writes to Qdrant in row order.
 func (s *Sink) Apply(ctx context.Context, b *arrowbatch.Batch, opts filament.ApplyOptions) (filament.WriteReceipt, error) {
 	s.mu.Lock()
 	if s.client == nil {
@@ -161,57 +161,79 @@ func (s *Sink) Apply(ctx context.Context, b *arrowbatch.Batch, opts filament.App
 	}
 
 	rows := b.Rows()
-	var upsertDocs []embedding.VectorDoc
-	var deleteIDs []string
+	if rows == nil {
+		return filament.WriteReceipt{}, nil
+	}
 
-	if rows != nil {
-		schema := rows.Schema()
-		pkColIdx := embedding.FindColumnIndex(schema, s.cfg.PrimaryKey)
-		if pkColIdx < 0 {
-			return filament.WriteReceipt{}, fmt.Errorf("qdrant sink: primary key column %q not found in resource %q schema", s.cfg.PrimaryKey, b.Resource)
+	schema := rows.Schema()
+	pkColIdx := embedding.FindColumnIndex(schema, s.cfg.PrimaryKey)
+	if pkColIdx < 0 {
+		return filament.WriteReceipt{}, fmt.Errorf("qdrant sink: primary key column %q not found in resource %q schema", s.cfg.PrimaryKey, b.Resource)
+	}
+
+	// Process operations in contiguous runs to preserve strict CDC row order
+	var pendingUpserts []embedding.VectorDoc
+	var pendingDeletes []string
+
+	flush := func() error {
+		if len(pendingUpserts) > 0 {
+			if err := s.client.BatchUpsert(ctx, collection, pendingUpserts); err != nil {
+				return fmt.Errorf("qdrant sink: batch upsert: %w", err)
+			}
+			pendingUpserts = pendingUpserts[:0]
+		}
+		if len(pendingDeletes) > 0 {
+			if err := s.client.BatchDelete(ctx, collection, pendingDeletes); err != nil {
+				return fmt.Errorf("qdrant sink: batch delete: %w", err)
+			}
+			pendingDeletes = pendingDeletes[:0]
+		}
+		return nil
+	}
+
+	for i := 0; i < numRows; i++ {
+		docID, err := embedding.ExtractDocID(rows, i, pkColIdx)
+		if err != nil {
+			return filament.WriteReceipt{}, fmt.Errorf("qdrant sink: extract primary key for row %d: %w", i, err)
 		}
 
-		for i := 0; i < numRows; i++ {
-			docID, err := embedding.ExtractDocID(rows, i, pkColIdx)
+		opStr := opStrings[i]
+
+		if opStr == "delete" {
+			if len(pendingUpserts) > 0 {
+				if err := flush(); err != nil {
+					return filament.WriteReceipt{}, err
+				}
+			}
+			pendingDeletes = append(pendingDeletes, docID)
+		} else {
+			if len(pendingDeletes) > 0 {
+				if err := flush(); err != nil {
+					return filament.WriteReceipt{}, err
+				}
+			}
+
+			docText := embedding.ExtractDocumentText(rows, i, s.cfg.TextFields)
+			vector, err := embedding.ExtractEmbeddingVector(rows, i, s.cfg.EmbeddingField)
 			if err != nil {
-				return filament.WriteReceipt{}, fmt.Errorf("qdrant sink: extract primary key for row %d: %w", i, err)
+				return filament.WriteReceipt{}, fmt.Errorf("qdrant sink: extract embedding vector for row %d: %w", i, err)
 			}
 
-			opStr := opStrings[i]
+			meta := embedding.ExtractMetadataMap(rows, i, s.cfg.EmbeddingField, b.Resource, b.Seq)
 
-			if opStr == "delete" {
-				deleteIDs = append(deleteIDs, docID)
-			} else {
-				docText := embedding.ExtractDocumentText(rows, i, s.cfg.TextFields)
-				vector, err := embedding.ExtractEmbeddingVector(rows, i, s.cfg.EmbeddingField)
-				if err != nil {
-					return filament.WriteReceipt{}, fmt.Errorf("qdrant sink: extract embedding vector for row %d: %w", i, err)
-				}
-
-				meta := embedding.ExtractMetadataMap(rows, i, s.cfg.EmbeddingField, b.Resource, b.Seq)
-
-				doc := embedding.VectorDoc{
-					ID:        docID,
-					Vector:    vector,
-					Document:  docText,
-					Operation: opStr,
-					Metadata:  meta,
-				}
-				upsertDocs = append(upsertDocs, doc)
+			doc := embedding.VectorDoc{
+				ID:        docID,
+				Vector:    vector,
+				Document:  docText,
+				Operation: opStr,
+				Metadata:  meta,
 			}
+			pendingUpserts = append(pendingUpserts, doc)
 		}
 	}
 
-	if len(upsertDocs) > 0 {
-		if err := s.client.BatchUpsert(ctx, collection, upsertDocs); err != nil {
-			return filament.WriteReceipt{}, fmt.Errorf("qdrant sink: batch upsert: %w", err)
-		}
-	}
-
-	if len(deleteIDs) > 0 {
-		if err := s.client.BatchDelete(ctx, collection, deleteIDs); err != nil {
-			return filament.WriteReceipt{}, fmt.Errorf("qdrant sink: batch delete: %w", err)
-		}
+	if err := flush(); err != nil {
+		return filament.WriteReceipt{}, err
 	}
 
 	s.written.Add(int64(numRows))

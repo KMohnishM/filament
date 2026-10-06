@@ -53,6 +53,19 @@ func TestMilvusSink_ParseConfig(t *testing.T) {
 	}
 }
 
+// TestMilvusSink_HTTPSSecurityCheck verifies that plain HTTP URLs are rejected when api_key is set.
+func TestMilvusSink_HTTPSSecurityCheck(t *testing.T) {
+	rawCfg := map[string]any{
+		"url":     "http://remote-milvus.example.com",
+		"api_key": "secret-token",
+	}
+
+	_, err := ParseConfig(filament.NewConfig(rawCfg))
+	if err == nil {
+		t.Errorf("expected ParseConfig to error when api_key is configured over plain http, got nil")
+	}
+}
+
 // TestMilvusSink_Lifecycle verifies Open, Apply, and Commit lifecycle execution for the Milvus sink.
 func TestMilvusSink_Lifecycle(t *testing.T) {
 	ctx := context.Background()

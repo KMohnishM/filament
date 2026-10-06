@@ -45,28 +45,15 @@ func OpString(op rowmodel.Operation) (string, error) {
 	}
 }
 
-// FindColumnIndex locates a column index by name, returning -1 if no candidate column is found.
+// FindColumnIndex locates a column index by name in schema, returning -1 if absent.
 func FindColumnIndex(schema *arrow.Schema, targetCol string) int {
-	if schema == nil {
+	if schema == nil || strings.TrimSpace(targetCol) == "" {
 		return -1
 	}
 
-	if targetCol != "" {
-		for i, field := range schema.Fields() {
-			if strings.EqualFold(field.Name, targetCol) {
-				return i
-			}
-		}
-		return -1
-	}
-
-	// Fallback field candidates
-	candidates := []string{"id", "_filament_key", "_id", "uuid"}
-	for _, c := range candidates {
-		for i, field := range schema.Fields() {
-			if strings.EqualFold(field.Name, c) {
-				return i
-			}
+	for i, field := range schema.Fields() {
+		if strings.EqualFold(field.Name, targetCol) {
+			return i
 		}
 	}
 

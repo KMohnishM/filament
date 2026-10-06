@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -97,8 +98,10 @@ func (c *Client) BatchUpsert(ctx context.Context, collection string, docs []embe
 			payload[k] = v
 		}
 
+		pointID := formatQdrantPointID(doc.ID)
+
 		point := map[string]interface{}{
-			"id":      doc.ID,
+			"id":      pointID,
 			"vector":  doc.Vector,
 			"payload": payload,
 		}
@@ -130,7 +133,12 @@ func (c *Client) BatchDelete(ctx context.Context, collection string, ids []strin
 		return nil
 	}
 
-	body := map[string]interface{}{"points": ids}
+	qdrantIDs := make([]interface{}, len(ids))
+	for i, id := range ids {
+		qdrantIDs[i] = formatQdrantPointID(id)
+	}
+
+	body := map[string]interface{}{"points": qdrantIDs}
 	return c.sendHTTPRequest(ctx, http.MethodPost, collection, "/points/delete", body)
 }
 
@@ -167,6 +175,14 @@ func (c *Client) GetDoc(collection, id string) (embedding.VectorDoc, bool) {
 		return doc, found
 	}
 	return embedding.VectorDoc{}, false
+}
+
+// formatQdrantPointID formats string IDs as uint64 if numeric, or string UUID.
+func formatQdrantPointID(id string) interface{} {
+	if val, err := strconv.ParseUint(id, 10, 64); err == nil {
+		return val
+	}
+	return id
 }
 
 func (c *Client) sendHTTPRequest(ctx context.Context, method, collection, path string, payload interface{}) error {

@@ -13,7 +13,7 @@ const defaultBatchSize = 500
 
 // Config defines the connection and execution settings for the Milvus sink.
 type Config struct {
-	// URL specifies the Milvus REST API / gRPC endpoint URI (e.g. http://localhost:19530).
+	// URL specifies the Milvus REST API / gRPC endpoint URI (e.g. https://xyz.zillizcloud.com).
 	URL string `json:"url"`
 
 	// APIKey specifies the authentication API key or token for Zilliz / Milvus Cloud.
@@ -31,7 +31,7 @@ type Config struct {
 	// EmbeddingField specifies an optional column containing pre-computed float vectors.
 	EmbeddingField string `json:"embedding_field,omitempty"`
 
-	// BatchSize specifies the maximum records written per batch.
+	// BatchSize specifies the maximum entities written per batch.
 	BatchSize int `json:"batch_size,omitempty"`
 }
 
@@ -42,7 +42,7 @@ func ConfigSchema() filament.ConfigSchema {
 			"url": {
 				Type:        "string",
 				Title:       "Milvus Endpoint",
-				Description: "Connection URI for Milvus REST API (e.g., http://localhost:19530 or https://xyz.zillizcloud.com).",
+				Description: "Connection URI for Milvus REST API (e.g., https://xyz.zillizcloud.com or http://localhost:19530).",
 			},
 			"api_key": {
 				Type:        "string",
@@ -94,6 +94,11 @@ func ParseConfig(cfg filament.Config) (Config, error) {
 
 	if val := cfg.String("api_key"); val != "" {
 		c.APIKey = val
+	}
+
+	// Security check: require HTTPS when api_key is configured on remote endpoints
+	if c.APIKey != "" && !strings.HasPrefix(c.URL, "https://") && !strings.HasPrefix(c.URL, "mock://") {
+		return c, fmt.Errorf("milvus sink: HTTPS scheme (https://) is required when 'api_key' is configured")
 	}
 
 	if val := cfg.String("collection"); val != "" {

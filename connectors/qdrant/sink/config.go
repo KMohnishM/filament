@@ -13,7 +13,7 @@ const defaultBatchSize = 500
 
 // Config defines the connection and execution settings for the Qdrant sink.
 type Config struct {
-	// URL specifies the Qdrant cluster REST endpoint URI (e.g. http://localhost:6333).
+	// URL specifies the Qdrant cluster REST endpoint URI (e.g. https://xyz.qdrant.tech).
 	URL string `json:"url"`
 
 	// APIKey specifies the authentication API key or token for Qdrant Cloud.
@@ -42,7 +42,7 @@ func ConfigSchema() filament.ConfigSchema {
 			"url": {
 				Type:        "string",
 				Title:       "Qdrant Endpoint",
-				Description: "Connection URI for Qdrant REST API (e.g., http://localhost:6333 or https://xyz.qdrant.tech).",
+				Description: "Connection URI for Qdrant REST API (e.g., https://xyz.qdrant.tech or http://localhost:6333).",
 			},
 			"api_key": {
 				Type:        "string",
@@ -94,6 +94,11 @@ func ParseConfig(cfg filament.Config) (Config, error) {
 
 	if val := cfg.String("api_key"); val != "" {
 		c.APIKey = val
+	}
+
+	// Security check: require HTTPS when api_key is configured on remote endpoints
+	if c.APIKey != "" && !strings.HasPrefix(c.URL, "https://") && !strings.HasPrefix(c.URL, "mock://") {
+		return c, fmt.Errorf("qdrant sink: HTTPS scheme (https://) is required when 'api_key' is configured")
 	}
 
 	if val := cfg.String("collection"); val != "" {

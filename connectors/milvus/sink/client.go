@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -130,7 +129,13 @@ func (c *Client) BatchDelete(ctx context.Context, collection string, ids []strin
 		return nil
 	}
 
-	filterExpr := fmt.Sprintf("id in %v", ids)
+	quoted := make([]string, len(ids))
+	for i, id := range ids {
+		b, _ := json.Marshal(id)
+		quoted[i] = string(b)
+	}
+	filterExpr := "id in [" + strings.Join(quoted, ",") + "]"
+
 	body := map[string]interface{}{
 		"collectionName": collection,
 		"filter":         filterExpr,
@@ -193,7 +198,7 @@ func (c *Client) sendHTTPRequest(ctx context.Context, method, path string, paylo
 
 	req.Header.Set("Content-Type", "application/json")
 	if c.cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+url.QueryEscape(c.cfg.APIKey))
+		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
 	}
 
 	resp, err := c.httpClient.Do(req)
