@@ -38,46 +38,59 @@ type Config struct {
 // ConfigSchema describes the configuration schema for UI catalog display and validation.
 func ConfigSchema() filament.ConfigSchema {
 	return filament.ConfigSchema{
-		Properties: map[string]filament.PropertySpec{
-			"url": {
-				Type:        "string",
-				Title:       "Milvus Endpoint",
-				Description: "Connection URI for Milvus REST API (e.g., https://xyz.zillizcloud.com or http://localhost:19530).",
+		Fields: []filament.ConfigField{
+			{
+				Name:     "url",
+				Type:     filament.FieldString,
+				Required: true,
+				Scope:    filament.ScopeConnection,
+				Help:     "Milvus REST API endpoint URL (e.g., https://xyz.zillizcloud.com or http://localhost:19530)",
 			},
-			"api_key": {
-				Type:        "string",
-				Title:       "API Key / Token",
-				Description: "Milvus / Zilliz Cloud authorization token.",
-				Secret:      true,
+			{
+				Name:     "api_key",
+				Type:     filament.FieldSecret,
+				Required: false,
+				Secret:   true,
+				Scope:    filament.ScopeConnection,
+				Help:     "Milvus / Zilliz Cloud authorization token",
 			},
-			"collection": {
-				Type:        "string",
-				Title:       "Collection Name",
-				Description: "Target Milvus collection name.",
+			{
+				Name:     "collection",
+				Type:     filament.FieldString,
+				Required: false,
+				Scope:    filament.ScopePipeline,
+				Help:     "Target Milvus collection name",
 			},
-			"primary_key": {
-				Type:        "string",
-				Title:       "Primary Key Field",
-				Description: "Column name in source records mapped as entity primary key.",
+			{
+				Name:     "primary_key",
+				Type:     filament.FieldString,
+				Required: false,
+				Scope:    filament.ScopePipeline,
+				Help:     "Column name in source records mapped as entity primary key",
 			},
-			"text_fields": {
-				Type:        "array",
-				Title:       "Text Payload Fields",
-				Description: "Column names to concatenate for document text.",
+			{
+				Name:     "text_fields",
+				Type:     filament.FieldList,
+				Required: false,
+				Scope:    filament.ScopePipeline,
+				Help:     "Column names to concatenate for document text",
 			},
-			"embedding_field": {
-				Type:        "string",
-				Title:       "Pre-computed Embedding Field",
-				Description: "Column name containing pre-computed float32 array vectors.",
+			{
+				Name:     "embedding_field",
+				Type:     filament.FieldString,
+				Required: false,
+				Scope:    filament.ScopePipeline,
+				Help:     "Column name containing pre-computed float32 array vectors",
 			},
-			"batch_size": {
-				Type:        "integer",
-				Title:       "Batch Size",
-				Description: "Maximum entities per batch write.",
-				Default:     defaultBatchSize,
+			{
+				Name:     "batch_size",
+				Type:     filament.FieldInt,
+				Required: false,
+				Default:  defaultBatchSize,
+				Scope:    filament.ScopePipeline,
+				Help:     "Maximum entities per batch write",
 			},
 		},
-		Required: []string{"url"},
 	}
 }
 

@@ -38,46 +38,59 @@ type Config struct {
 // ConfigSchema describes the configuration schema for UI catalog display and validation.
 func ConfigSchema() filament.ConfigSchema {
 	return filament.ConfigSchema{
-		Properties: map[string]filament.PropertySpec{
-			"url": {
-				Type:        "string",
-				Title:       "Qdrant Endpoint",
-				Description: "Connection URI for Qdrant REST API (e.g., https://xyz.qdrant.tech or http://localhost:6333).",
+		Fields: []filament.ConfigField{
+			{
+				Name:     "url",
+				Type:     filament.FieldString,
+				Required: true,
+				Scope:    filament.ScopeConnection,
+				Help:     "Qdrant REST API endpoint URL (e.g., https://xyz.qdrant.tech or http://localhost:6333)",
 			},
-			"api_key": {
-				Type:        "string",
-				Title:       "API Key",
-				Description: "Qdrant API Key or cluster authorization token.",
-				Secret:      true,
+			{
+				Name:     "api_key",
+				Type:     filament.FieldSecret,
+				Required: false,
+				Secret:   true,
+				Scope:    filament.ScopeConnection,
+				Help:     "Qdrant API Key or cluster authorization token",
 			},
-			"collection": {
-				Type:        "string",
-				Title:       "Collection Name",
-				Description: "Target Qdrant collection name.",
+			{
+				Name:     "collection",
+				Type:     filament.FieldString,
+				Required: false,
+				Scope:    filament.ScopePipeline,
+				Help:     "Target Qdrant collection name",
 			},
-			"primary_key": {
-				Type:        "string",
-				Title:       "Primary Key Field",
-				Description: "Column name in source records mapped as point ID.",
+			{
+				Name:     "primary_key",
+				Type:     filament.FieldString,
+				Required: false,
+				Scope:    filament.ScopePipeline,
+				Help:     "Column name in source records mapped as point ID",
 			},
-			"text_fields": {
-				Type:        "array",
-				Title:       "Text Payload Fields",
-				Description: "Column names to concatenate for document text.",
+			{
+				Name:     "text_fields",
+				Type:     filament.FieldList,
+				Required: false,
+				Scope:    filament.ScopePipeline,
+				Help:     "Column names to concatenate for document text",
 			},
-			"embedding_field": {
-				Type:        "string",
-				Title:       "Pre-computed Embedding Field",
-				Description: "Column name containing pre-computed float32 array vectors.",
+			{
+				Name:     "embedding_field",
+				Type:     filament.FieldString,
+				Required: false,
+				Scope:    filament.ScopePipeline,
+				Help:     "Column name containing pre-computed float32 array vectors",
 			},
-			"batch_size": {
-				Type:        "integer",
-				Title:       "Batch Size",
-				Description: "Maximum points per batch write.",
-				Default:     defaultBatchSize,
+			{
+				Name:     "batch_size",
+				Type:     filament.FieldInt,
+				Required: false,
+				Default:  defaultBatchSize,
+				Scope:    filament.ScopePipeline,
+				Help:     "Maximum points per batch write",
 			},
 		},
-		Required: []string{"url"},
 	}
 }
 

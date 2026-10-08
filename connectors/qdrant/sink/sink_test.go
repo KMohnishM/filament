@@ -73,7 +73,7 @@ func TestQdrantSink_Lifecycle(t *testing.T) {
 
 	runSpec := filament.RunSpec{
 		Run: filament.RunID("test-run-1"),
-		Sink: filament.SinkConfig{
+		Sink: filament.Ref{
 			Config: map[string]any{
 				"url":        "mock://localhost:6333",
 				"collection": "test_collection",
@@ -93,8 +93,8 @@ func TestQdrantSink_Lifecycle(t *testing.T) {
 		t.Fatalf("failed to apply batch: %v", err)
 	}
 
-	if receipt.RowsWritten != 0 {
-		t.Errorf("expected 0 rows written for marker batch, got %d", receipt.RowsWritten)
+	if receipt.Rows != 0 {
+		t.Errorf("expected 0 rows written for marker batch, got %d", receipt.Rows)
 	}
 
 	if err := s.Commit(ctx); err != nil {
@@ -109,7 +109,7 @@ func TestQdrantSink_AbortRejection(t *testing.T) {
 
 	runSpec := filament.RunSpec{
 		Run: filament.RunID("test-run-abort"),
-		Sink: filament.SinkConfig{
+		Sink: filament.Ref{
 			Config: map[string]any{
 				"url": "mock://localhost:6333",
 			},

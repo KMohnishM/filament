@@ -237,7 +237,11 @@ func (s *Sink) Apply(ctx context.Context, b *arrowbatch.Batch, opts filament.App
 	}
 
 	s.written.Add(int64(numRows))
-	return filament.WriteReceipt{RowsWritten: int64(numRows)}, nil
+	return filament.WriteReceipt{
+		URI:   fmt.Sprintf("qdrant://%s/%s", s.cfg.URL, collection),
+		Rows:  numRows,
+		Bytes: 0,
+	}, nil
 }
 
 // Commit finalizes active batch transactions.
