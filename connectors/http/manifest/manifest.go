@@ -92,15 +92,23 @@ type DiscoverySpec struct {
 	DefaultResources []string    `yaml:"default_resources,omitempty"` // nil selects all; empty selects none
 }
 
+// ConfigCondition controls field visibility based on another field's selected value.
+type ConfigCondition struct {
+	Field  string   `yaml:"field"`
+	Values []string `yaml:"values"`
+}
+
 // ConfigSpec declares one user-facing connector configuration field. Enum is
 // the ordered set of choices for enum and list fields.
 type ConfigSpec struct {
-	Type     string   `yaml:"type"`
-	Required bool     `yaml:"required,omitempty"`
-	Default  any      `yaml:"default,omitempty"`
-	Enum     []string `yaml:"enum,omitempty"`
-	Help     string   `yaml:"help,omitempty"`
-	Scope    string   `yaml:"scope,omitempty"`
+	VisibleWhen *ConfigCondition  `yaml:"visible_when,omitempty"`
+	Type        string            `yaml:"type"`
+	Required    bool              `yaml:"required,omitempty"`
+	Default     any               `yaml:"default,omitempty"`
+	Enum        []string          `yaml:"enum,omitempty"`
+	EnumLabels  map[string]string `yaml:"enum_labels,omitempty"`
+	Help        string            `yaml:"help,omitempty"`
+	Scope       string            `yaml:"scope,omitempty"`
 }
 
 // Defaults are inherited by resources when the corresponding resource field
@@ -207,13 +215,38 @@ func (a *AuthSpec) UnmarshalYAML(node *yaml.Node) error {
 		}
 		a.Params["user"] = referenceTemplate(spec.Username)
 		a.Params["pass"] = referenceTemplate(spec.Password)
+	case "select":
+		a.Type = "select"
+		var spec struct {
+			Field string `yaml:"field"`
+			Cases map[string]struct {
+				Required []string `yaml:"required"`
+				Auth     AuthSpec `yaml:"auth"`
+			} `yaml:"cases"`
+		}
+		if err := value.Decode(&spec); err != nil {
+			return err
+		}
+		cases := map[string]any{}
+		for name, choice := range spec.Cases {
+			required := make([]any, len(choice.Required))
+			for i, field := range choice.Required {
+				required[i] = field
+			}
+			cases[name] = map[string]any{"type": choice.Auth.Type, "params": choice.Auth.Params, "required": required}
+		}
+		a.Params["field"], a.Params["cases"] = spec.Field, cases
 	case "oauth2":
 		a.Type = "oauth2_cc"
 		var spec struct {
-			TokenURL     string `yaml:"token_url"`
-			ClientID     string `yaml:"client_id"`
-			ClientSecret string `yaml:"client_secret"`
-			Scope        string `yaml:"scope"`
+			TokenURL     string            `yaml:"token_url"`
+			ClientID     string            `yaml:"client_id"`
+			ClientSecret string            `yaml:"client_secret"`
+			Scope        string            `yaml:"scope"`
+			GrantType    string            `yaml:"grant_type"`
+			RefreshToken string            `yaml:"refresh_token"`
+			HeaderPrefix string            `yaml:"header_prefix"`
+			Params       map[string]string `yaml:"params"`
 		}
 		if err := value.Decode(&spec); err != nil {
 			return err
@@ -222,6 +255,14 @@ func (a *AuthSpec) UnmarshalYAML(node *yaml.Node) error {
 		a.Params["client_id"] = referenceTemplate(spec.ClientID)
 		a.Params["client_secret"] = referenceTemplate(spec.ClientSecret)
 		a.Params["scope"] = spec.Scope
+		a.Params["grant_type"] = spec.GrantType
+		a.Params["refresh_token"] = referenceTemplate(spec.RefreshToken)
+		a.Params["header_prefix"] = spec.HeaderPrefix
+		extra := map[string]any{}
+		for k, v := range spec.Params {
+			extra[k] = v
+		}
+		a.Params["params"] = extra
 	default:
 		return fmt.Errorf("unknown auth strategy %q", strategy)
 	}
@@ -291,6 +332,7 @@ type Resource struct {
 	Incremental *IncrementalSpec  `yaml:"incremental,omitempty"`
 	Parent      *ParentRef        `yaml:"parent,omitempty"`
 	Stream      *StreamSpec       `yaml:"stream,omitempty"`
+	Export      *ExportSpec       `yaml:"export,omitempty"`
 }
 
 // FieldSpec maps a response path to a typed output field.
@@ -386,7 +428,7 @@ type PaginationSpec struct {
 	Strict bool   `yaml:"strict,omitempty"` // require an explicit cursor envelope, including terminal pages
 	Type   string `yaml:"type"`             // cursor | offset | page | link_header | next_url | none
 
-	// Shared by cursor and page pagination.
+	// Shared by cursor, offset, and page pagination.
 	InjectInto  string `yaml:"inject_into,omitempty"` // body | query | header (cursor only)
 	HasMorePath string `yaml:"has_more_path,omitempty"`
 
@@ -474,6 +516,7 @@ func (p *PaginationSpec) UnmarshalYAML(node *yaml.Node) error {
 		p.Type, p.CursorPath, p.InjectInto, p.CursorParam, p.HasMorePath, p.AllowNullTerminates = "cursor", spec.Response, target, param, spec.More, spec.NullTerminates
 	case "offset":
 		var spec struct {
+			More     string `yaml:"more"`
 			Offset   string `yaml:"offset"`
 			Limit    string `yaml:"limit"`
 			PageSize int    `yaml:"page_size"`
@@ -486,6 +529,7 @@ func (p *PaginationSpec) UnmarshalYAML(node *yaml.Node) error {
 		if offsetTarget != limitTarget || (offsetTarget != "query" && offsetTarget != "body") {
 			return fmt.Errorf("offset pagination fields must share a query or body target")
 		}
+		p.HasMorePath = spec.More
 		p.Type, p.OffsetParam, p.LimitParam, p.PageSize, p.OffsetInjectInto = "offset", offsetParam, limitParam, spec.PageSize, offsetTarget
 	case "page":
 		var spec struct {
@@ -541,6 +585,12 @@ type IncrementalSpec struct {
 	// OverlapSeconds re-fetches a sliding window before a time or numeric
 	// timestamp cursor to tolerate retroactive updates behind the max.
 	OverlapSeconds int `yaml:"overlap_seconds,omitempty"`
+	// ValuePrefix is prepended to the watermark value when it is injected
+	// into the request (query, header, or body). The stored checkpoint and
+	// all comparisons keep the raw value; only the wire representation is
+	// prefixed. FHIR search needs `_lastUpdated=ge<ts>` — a bare timestamp
+	// carries `eq` semantics and would silently return the wrong result set.
+	ValuePrefix string `yaml:"value_prefix,omitempty"`
 }
 
 // DurableCheckpointKey returns the stable storage key for this watermark.

@@ -11,6 +11,13 @@ import (
 // configuration, and hook rules survive the cutover unchanged.
 
 type (
+	// ExportJobCreatedEvent reports successful creation and validated captures.
+	ExportJobCreatedEvent filament.ExportJobProgress
+	// ExportJobPolledEvent samples completed status checks; Polls is cumulative.
+	ExportJobPolledEvent filament.ExportJobProgress
+	// ExportJobReadyEvent reports validated artifact availability, not sink commit.
+	ExportJobReadyEvent filament.ExportJobProgress
+
 	// StreamAttemptEndedEvent is an observational worker-lifetime event, not a
 	// terminal run event: the same continuous run may pause or retry.
 	StreamAttemptEndedEvent struct {
@@ -83,6 +90,13 @@ type (
 		Records int64 `json:"records"`
 		Bytes   int64 `json:"bytes"`
 	}
+	// BatchTransformedEvent records one batch through the transform stage: its
+	// size after the plan and the time the plan took.
+	BatchTransformedEvent struct {
+		Records  int64         `json:"records"`
+		Bytes    int64         `json:"bytes"`
+		Duration time.Duration `json:"duration"`
+	}
 	// BatchWrittenEvent marks one batch durably applied to the sink.
 	BatchWrittenEvent struct {
 		Records          int64                     `json:"records"`
@@ -150,6 +164,10 @@ type (
 // The event kinds, one per payload type above; each value is the capability
 // to emit or subscribe to that kind.
 var (
+	ExportJobCreated = define[ExportJobCreatedEvent]("export.job_created")
+	ExportJobPolled  = define[ExportJobPolledEvent]("export.job_polled")
+	ExportJobReady   = define[ExportJobReadyEvent]("export.job_ready")
+
 	StreamAttemptEnded = define[StreamAttemptEndedEvent]("stream.attempt_ended")
 	RunRequested       = define[RunRequestedEvent]("run.requested")
 	RunStarted         = define[RunStartedEvent]("run.started")
@@ -169,6 +187,7 @@ var (
 	ResourceFailed    = define[ResourceFailedEvent]("resource.failed")
 
 	BatchBuffered            = define[BatchBufferedEvent]("batch.buffered")
+	BatchTransformed         = define[BatchTransformedEvent]("batch.transformed")
 	BatchWritten             = define[BatchWrittenEvent]("batch.written")
 	IntegrityVerified        = define[IntegrityVerifiedEvent]("batch.integrity_verified")
 	EncodedIntegrityVerified = define[EncodedIntegrityVerifiedEvent]("batch.encoded_integrity_verified")
